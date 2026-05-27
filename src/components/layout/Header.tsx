@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LogOut, Play, Square, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useQuery } from '@tanstack/react-query';
-import { timesheetService } from '../../services/timesheetService';
 import { useOutboxStore } from '../../store/outboxStore';
+import { repository } from '../../services/repository'; 
+
+// Minimal interface to satisfy TypeScript locally, ensuring ZOD LAW compliance
+interface TimesheetRecord {
+  id?: string;
+  user_id: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  status: string | null;
+  is_deleted?: boolean;
+}
 
 export function Header() {
   const signOut = useAuthStore((s) => s.signOut);
@@ -13,20 +23,40 @@ export function Header() {
   // IMMUTABLE ZUSTAND STORE LAW: Exact isolated selector
   const pendingMutations = useOutboxStore((s) => s.mutations.length);
 
-  const { data: activeShift, isLoading: checkingShift } = useQuery({
-    queryKey: ['active_shift', session?.user?.id],
-    queryFn: () => timesheetService.getActiveShift(session?.user?.id as string),
+  // Fetch all timesheets via the Universal Repository
+  const { data: allTimesheets = [], isLoading: checkingShift } = useQuery<TimesheetRecord[]>({
+    queryKey: ['timesheets'],
+    queryFn: () => repository.read<TimesheetRecord>('timesheets'),
     enabled: !!session?.user?.id,
   });
 
+  // Local component logic to find the active shift for this user
+  const activeShift = useMemo(() => {
+    if (!session?.user?.id || !allTimesheets.length) return null;
+    return allTimesheets.find(
+      (t) => t.user_id === session.user.id && !t.clock_out && !t.is_deleted
+    ) || null;
+  }, [allTimesheets, session?.user?.id]);
+
+  // Handle the clock action using the repository's unified write method
   const handleClockAction = async () => {
     if (!session?.user?.id) return;
     setIsProcessing(true);
+    
     try {
       if (activeShift) {
-        await timesheetService.clockOut(activeShift, session.user.id);
+        // Clock Out: Update existing record with clock_out time
+        await repository.write('timesheets', {
+          ...activeShift,
+          clock_out: new Date().toISOString(),
+        });
       } else {
-        await timesheetService.clockIn(session.user.id);
+        // Clock In: Create new record
+        await repository.write('timesheets', {
+          user_id: session.user.id,
+          clock_in: new Date().toISOString(),
+          status: 'PENDING',
+        });
       }
     } catch (error) {
       console.error("Failed to update timesheet", error);

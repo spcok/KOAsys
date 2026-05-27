@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Heart, AlertCircle, Scale, ClipboardCheck, CheckCircle, Plus, Calendar, ArrowDownAZ, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimalFormModal } from '../animals/AnimalFormModal';
-import { animalService } from '../../services/animalService';
-import { dailyLogService } from '../../services/dailyLogService';
-import { feedingService } from '../../services/feedingService';
-import { taskService } from '../../services/taskService';
+import { repository } from '../../services/repository'; // <-- New Unified Data Access
 import type { Animal, DailyLog, FeedingSchedule, Task } from '../../types/schema';
 
 interface EnhancedAnimal extends Animal {
@@ -24,30 +21,58 @@ export function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [sortMode, setSortMode] = useState<SortMode>('NAME_ASC');
 
-  // 1. Live Query Hooks fetching strictly through service layers & parameterized to selectedDate
-  const { data: rawAnimals = [] } = useQuery<Animal[]>({ 
+  // 1. Live Query Hooks using the Generic Repository
+  const { data: allAnimals = [] } = useQuery<Animal[]>({ 
     queryKey: ['animals'],
-    queryFn: () => animalService.getAnimals()
+    queryFn: () => repository.read<Animal>('animals')
   });
   
-  const { data: rawTasks = [] } = useQuery<Task[]>({ 
+  const { data: allTasks = [] } = useQuery<Task[]>({ 
     queryKey: ['tasks'],
-    queryFn: () => taskService.getPendingTasks()
+    queryFn: () => repository.read<Task>('tasks')
   });
 
-  const { data: dashboardLogs = { todaysLogs: [], lastFeeds: [] } } = useQuery<{ todaysLogs: DailyLog[], lastFeeds: DailyLog[] }>({
-    queryKey: ['dashboard_logs', selectedDate],
-    queryFn: () => dailyLogService.getDashboardLogs(selectedDate)
+  const { data: allLogs = [] } = useQuery<DailyLog[]>({
+    queryKey: ['daily_logs'],
+    queryFn: () => repository.read<DailyLog>('daily_logs')
   });
 
-  const todaysLogs = dashboardLogs?.todaysLogs || [];
-  const lastFeeds = dashboardLogs?.lastFeeds || [];
-
-  const { data: rawSchedules = [] } = useQuery<FeedingSchedule[]>({
-    queryKey: ['feeding_schedules', selectedDate],
-    queryFn: () => feedingService.getSchedulesForDashboard(selectedDate)
+  const { data: allSchedules = [] } = useQuery<FeedingSchedule[]>({
+    queryKey: ['feeding_schedules'],
+    queryFn: () => repository.read<FeedingSchedule>('feeding_schedules')
   });
 
+  // 2. Component-Level Logic (Replacing the old Service Layer logic)
+  const rawAnimals = useMemo(() => allAnimals.filter(a => !a.is_deleted), [allAnimals]);
+  const rawTasks = useMemo(() => allTasks.filter(t => t.status !== 'COMPLETED' && !t.is_deleted), [allTasks]);
+
+  const { todaysLogs, lastFeeds } = useMemo(() => {
+    const activeLogs = allLogs.filter(l => !l.is_deleted);
+    const todays = activeLogs.filter(l => (l.log_date || '').startsWith(selectedDate));
+    
+    // Find the single most recent feed log for each animal
+    const feeds = activeLogs.filter(l => l.log_type === 'FEED');
+    feeds.sort((a, b) => new Date(b.log_date || 0).getTime() - new Date(a.log_date || 0).getTime());
+    
+    const latestFeeds: DailyLog[] = [];
+    const seen = new Set<string>();
+    for (const feed of feeds) {
+      const aId = feed.animal_id as string;
+      if (!seen.has(aId)) {
+        latestFeeds.push(feed);
+        seen.add(aId);
+      }
+    }
+    return { todaysLogs: todays, lastFeeds: latestFeeds };
+  }, [allLogs, selectedDate]);
+
+  const rawSchedules = useMemo(() => {
+    return allSchedules
+      .filter(s => !s.is_deleted && s.scheduled_date && s.scheduled_date >= selectedDate)
+      .sort((a, b) => new Date(a.scheduled_date!).getTime() - new Date(b.scheduled_date!).getTime());
+  }, [allSchedules, selectedDate]);
+
+  // 3. UI Helper Functions
   const adjustDate = (days: number) => {
     const date = new Date(selectedDate);
     date.setDate(date.getDate() + days);
@@ -58,7 +83,6 @@ export function Dashboard() {
     setSelectedDate(new Date().toISOString().split('T')[0]);
   };
 
-  // Helper formatting function matching the DailyLogs precision layout rules
   const formatWeight = (g: number, unitStr: string) => {
     const u = (unitStr || 'g').toLowerCase();
     if (u === 'lbs' || u === 'lb') {
@@ -83,18 +107,14 @@ export function Dashboard() {
     return `${g}g`;
   };
 
-  const activeAnimals = rawAnimals.filter((a) => !a.is_deleted);
-  
-  const sortedAnimals = [...activeAnimals].sort((a, b) => {
+  // 4. Sorting & Data Enhancement
+  const sortedAnimals = [...rawAnimals].sort((a, b) => {
     if (sortMode === 'NAME_ASC') return (a.name || '').localeCompare(b.name || '');
     if (sortMode === 'NAME_DESC') return (b.name || '').localeCompare(a.name || '');
     if (sortMode === 'CUSTOM') return (a.display_order ?? 999) - (b.display_order ?? 999);
     return 0;
   });
 
-  const tasks = rawTasks;
-
-  // 2. Real-time Aggregation and Dynamic Stat Population Engine
   const enhancedAnimals: EnhancedAnimal[] = sortedAnimals.map((animal) => {
     const animalId = animal.id as string;
     const animalTodaysLogs = todaysLogs.filter((l) => l.animal_id === animalId);
@@ -118,6 +138,7 @@ export function Dashboard() {
     ? enhancedAnimals 
     : enhancedAnimals.filter((a) => (a.category || '').toUpperCase() === activeTab);
 
+  // 5. Render Methods (Unchanged)
   const renderHeaders = () => {
     if (activeTab === 'OWLS' || activeTab === 'RAPTORS') {
       return (
@@ -242,10 +263,10 @@ export function Dashboard() {
                       <div className="p-2 bg-[#0A0B0E] border border-slate-800/80 text-blue-500 rounded-xl shadow-inner"><ClipboardCheck size={18} /></div>
                       <h2 className="text-sm font-black text-white uppercase tracking-widest">Pending Duties</h2>
                   </div>
-                  <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-lg">{tasks.length}</span>
+                  <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-lg">{rawTasks.length}</span>
               </div>
               <div className="mt-4 flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-hide relative z-10">
-                  {tasks.length > 0 ? tasks.map((t) => (
+                  {rawTasks.length > 0 ? rawTasks.map((t) => (
                       <div key={t.id} className="flex items-start gap-3 p-3 rounded-xl bg-[#0A0B0E] border border-slate-800/80 shadow-inner">
                           <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0"/>
                           <div>
