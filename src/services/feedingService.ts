@@ -1,12 +1,11 @@
 import { baseService } from './baseService';
 import { feedingSchedulesCollection } from '../lib/db';
-import { supabase } from '../lib/supabase';
 import type { FeedingSchedule } from '../types/schema';
 
 export const feedingService = {
   saveSchedule: async (data: Partial<FeedingSchedule>, userId: string): Promise<void> => {
     const payload = { ...data, created_by: userId, updated_at: new Date().toISOString() };
-    await baseService.upsertCollection(feedingSchedulesCollection, payload);
+    await baseService.upsertCollection(feedingSchedulesCollection, payload as any);
     await baseService.upsert({
       table: 'feeding_schedules',
       payload,
@@ -22,7 +21,7 @@ export const feedingService = {
         updated_at: new Date().toISOString(),
         id: data.id || crypto.randomUUID()
       };
-      await baseService.upsertCollection(feedingSchedulesCollection, payload);
+      await baseService.upsertCollection(feedingSchedulesCollection, payload as any);
       await baseService.upsert({
         table: 'feeding_schedules',
         payload,
@@ -33,6 +32,10 @@ export const feedingService = {
 
   getSchedulesForDashboard: async (date?: string): Promise<FeedingSchedule[]> => {
     let list = Array.from(feedingSchedulesCollection.values()) as FeedingSchedule[];
+    
+    // Filter out soft-deleted records before returning to UI
+    list = list.filter(s => !s.is_deleted);
+    
     if (date) {
       list = list.filter(s => s.scheduled_date === date);
     }
@@ -40,11 +43,20 @@ export const feedingService = {
   },
 
   deleteSchedule: async (id: string, userId?: string): Promise<void> => {
-    await feedingSchedulesCollection.delete(id);
-    try {
-      await supabase.from('feeding_schedules').delete().eq('id', id);
-    } catch (e) {
-      console.error('Failed to remote delete schedule, keeping local delete state', e);
-    }
+    const payload = { 
+      id, 
+      is_deleted: true,
+      updated_at: new Date().toISOString() 
+    };
+    
+    // Optimistic Local Vault Update: Sets is_deleted to true so the UI hides it instantly
+    await baseService.upsertCollection(feedingSchedulesCollection, payload as any);
+    
+    // Deterministic Cloud Update: Will catch in the OutboxStore if the keeper is offline
+    await baseService.upsert({
+      table: 'feeding_schedules',
+      payload,
+      queryKey: ['feeding_schedules']
+    });
   }
 };

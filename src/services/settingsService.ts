@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 import type { Organisation, ZLADocument, OperationalList } from '../types/schema';
 
 export const settingsService = {
-  // We use baseService to ensure the write is caught in the Outbox if the user is offline
   updateOrganisation: async (data: Partial<Organisation>): Promise<void> => {
     await baseService.upsert({
       table: 'organisations',
@@ -19,7 +18,8 @@ export const settingsService = {
   },
 
   getZLADocuments: async (): Promise<ZLADocument[]> => {
-    return Array.from(zlaDocumentsCollection.values()) as ZLADocument[];
+    const list = Array.from(zlaDocumentsCollection.values()) as ZLADocument[];
+    return list.filter(doc => !doc.is_deleted); // Filter out soft-deleted records
   },
 
   addZLADocument: async (data: Partial<ZLADocument>): Promise<void> => {
@@ -38,16 +38,26 @@ export const settingsService = {
   },
 
   deleteZLADocument: async (id: string): Promise<void> => {
-    await zlaDocumentsCollection.delete(id);
-    try {
-      await supabase.from('zla_documents').delete().eq('id', id);
-    } catch (e) {
-      console.error('Failed to remote-delete ZLA document, keeping local delete state', e);
-    }
+    const payload = { 
+      id, 
+      is_deleted: true,
+      updated_at: new Date().toISOString() 
+    };
+    
+    // Optimistic Local Vault Update
+    await baseService.upsertCollection(zlaDocumentsCollection, payload as any);
+    
+    // Deterministic Cloud Update
+    await baseService.upsert({
+      table: 'zla_documents',
+      payload,
+      queryKey: ['zla_documents']
+    });
   },
 
   getOperationalLists: async (): Promise<OperationalList[]> => {
-    return Array.from(operationalListsCollection.values()) as OperationalList[];
+    const list = Array.from(operationalListsCollection.values()) as OperationalList[];
+    return list.filter(item => !item.is_deleted); // Filter out soft-deleted records
   },
 
   addOperationalListItem: async (data: Partial<OperationalList>, userId?: string): Promise<void> => {
@@ -67,14 +77,25 @@ export const settingsService = {
   },
 
   deleteOperationalListItem: async (id: string, userId?: string): Promise<void> => {
-    await operationalListsCollection.delete(id);
-    try {
-      await supabase.from('operational_lists').delete().eq('id', id);
-    } catch (e) {
-      console.error('Failed to remote delete operational list item, keeping local state', e);
-    }
+    const payload = { 
+      id, 
+      is_deleted: true,
+      updated_at: new Date().toISOString() 
+    };
+    
+    // Optimistic Local Vault Update
+    await baseService.upsertCollection(operationalListsCollection, payload as any);
+    
+    // Deterministic Cloud Update
+    await baseService.upsert({
+      table: 'operational_lists',
+      payload,
+      queryKey: ['operational_lists']
+    });
   },
 
+  // Note: Direct Supabase call retained here as this handles large binary file uploads, 
+  // which intentionally bypass the relational Electric Sync engine.
   uploadPublicFile: async (file: File, bucket: string, folder?: string): Promise<string> => {
     const path = `${folder ? folder + '/' : ''}${crypto.randomUUID()}-${file.name}`;
     const { data, error } = await supabase.storage.from(bucket).upload(path, file);

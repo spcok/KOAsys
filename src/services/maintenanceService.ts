@@ -5,7 +5,7 @@ import type { MaintenanceTicket, User } from '../types/schema';
 export const maintenanceService = {
   saveTicket: async (data: Partial<MaintenanceTicket>, userId: string): Promise<void> => {
     const payload = { ...data, created_by: userId, updated_at: new Date().toISOString() };
-    await baseService.upsertCollection(maintenanceTicketsCollection, payload);
+    await baseService.upsertCollection(maintenanceTicketsCollection, payload as any);
     await baseService.upsert({
       table: 'maintenance_tickets',
       payload,
@@ -14,10 +14,12 @@ export const maintenanceService = {
   },
 
   getTickets: async (): Promise<MaintenanceTicket[]> => {
-    return Array.from(maintenanceTicketsCollection.values()) as MaintenanceTicket[];
+    const list = Array.from(maintenanceTicketsCollection.values()) as MaintenanceTicket[];
+    return list.filter(ticket => !ticket.is_deleted);
   },
 
   getStaffMembers: async (): Promise<User[]> => {
-    return Array.from(usersCollection.values()) as User[];
+    const list = Array.from(usersCollection.values()) as User[];
+    return list.filter(user => !user.is_deleted);
   }
 };
