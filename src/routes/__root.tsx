@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useAuthStore } from '../store/authStore';
 import { AppLayout } from '../components/layout/AppLayout';
+import { SyncEngine } from '../components/data/SyncEngine';
 
 export const Route = createRootRoute({
   // The Auth Guard: Enforces deterministic security access across the pipeline
@@ -15,8 +16,12 @@ export const Route = createRootRoute({
     }
   },
   component: () => (
-    <AppLayout>
-      <Outlet />
-    </AppLayout>
+    <>
+      {/* Global Sync Engine: Initialized at root to ensure persistent hydration */}
+      <SyncEngine />
+      <AppLayout>
+        <Outlet />
+      </AppLayout>
+    </>
   ),
 });
