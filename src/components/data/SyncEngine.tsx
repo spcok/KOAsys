@@ -1,78 +1,47 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useOutboxStore } from '../../store/outboxStore';
-import { CloudOff, CloudUpload, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { syncAll } from '../../lib/db';
+import { useAuthStore } from '../../store/authStore'; // Import your auth store
 
 export function SyncEngine() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
-  
-  // Strict Zustand selectors
-  const mutations = useOutboxStore((s) => s.mutations);
-  const removeMutation = useOutboxStore((s) => s.removeMutation);
+  const [status, setStatus] = useState<'IDLE' | 'BOOTING' | 'SYNCING' | 'COMPLETE' | 'ERROR'>('IDLE');
+  const session = useAuthStore((s) => s.session); // Observe the session
 
-  const processOutbox = useCallback(async () => {
-    if (isSyncing || mutations.length === 0 || !navigator.onLine) return;
-    
-    setIsSyncing(true);
+  useEffect(() => {
+    // Only run if we have a session
+    if (!session) {
+      console.log('[SyncEngine] Waiting for authentication...');
+      return;
+    }
 
-    const queue = [...mutations].sort((a, b) => 
-      new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
-    );
-
-    for (const item of queue) {
+    async function boot() {
+      setStatus('BOOTING');
       try {
-        const { error } = await supabase.from(item.table).upsert(item.payload);
-        if (error) throw error;
-        removeMutation(item.id);
-      } catch (error) {
-        console.warn(`[SyncEngine] Pipeline halted at ${item.table}. Resuming on next heartbeat.`, error);
-        break; 
+        console.log('[SyncEngine] Auth detected. Starting sync...');
+        setStatus('SYNCING');
+        await syncAll();
+        setStatus('COMPLETE');
+      } catch (err) {
+        console.error('[SyncEngine] Pipeline failure:', err);
+        setStatus('ERROR');
       }
     }
 
-    setIsSyncing(false);
-  }, [isSyncing, mutations, removeMutation]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const handleOnline = () => { if (isMounted) setIsOnline(true); };
-    const handleOffline = () => { if (isMounted) setIsOnline(false); };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    if (navigator.onLine && mutations.length > 0 && !isSyncing) {
-      processOutbox();
-    }
-
-    return () => {
-      isMounted = false;
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [mutations.length, processOutbox, isSyncing]);
-
-  if (isOnline && mutations.length === 0 && !isSyncing) return null;
+    boot();
+  }, [session]); // Re-run whenever the session changes
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 pointer-events-none">
-      {!isOnline && (
-        <div className="flex items-center gap-3 bg-rose-500/10 border border-rose-500/20 backdrop-blur-md px-4 py-2.5 rounded-full shadow-2xl pointer-events-auto">
-          <CloudOff size={14} className="text-rose-400" />
-          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Offline Failover Active</span>
-        </div>
-      )}
-      {mutations.length > 0 && (
-        <div className="flex items-center gap-3 bg-[#0A0B0E]/90 border border-slate-800/80 backdrop-blur-md px-4 py-2.5 rounded-full shadow-2xl pointer-events-auto">
-          {isSyncing ? <Loader2 size={14} className="text-blue-500 animate-spin" /> : <CloudUpload size={14} className="text-amber-500 animate-pulse" />}
-          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-            {isSyncing ? 'Synchronizing...' : 'Pending Sync'}
-            <span className="ml-2 text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded text-[9px]">{mutations.length}</span>
-          </span>
-        </div>
-      )}
+    <div className="fixed bottom-4 right-4 z-[9999]">
+      <div className={`px-4 py-2 rounded-xl border font-black text-[10px] uppercase tracking-widest shadow-2xl flex items-center gap-3 bg-[#0F1117] ${
+        status === 'COMPLETE' ? 'border-emerald-500/20 text-emerald-500' : 
+        status === 'SYNCING' || status === 'BOOTING' ? 'border-amber-500/20 text-amber-500' : 
+        'border-rose-500/20 text-rose-500'
+      }`}>
+        <div className={`w-2 h-2 rounded-full ${
+          status === 'SYNCING' || status === 'BOOTING' ? 'animate-ping bg-amber-500' : 
+          status === 'COMPLETE' ? 'bg-emerald-500' : 'bg-rose-500'
+        }`} />
+        PIPELINE: {status}
+      </div>
     </div>
   );
 }

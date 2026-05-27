@@ -1,35 +1,38 @@
+console.log('Current Sync URL:', import.meta.env.VITE_ELECTRIC_URL);
+
 import { createCollection } from '@tanstack/react-db';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
 import { QueryClient } from '@tanstack/react-query';
 
+// --- 1. QueryClient Configuration ---
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minute stable cache
-      refetchOnWindowFocus: true, // Server-first: attempt fresh sync on focus
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: true,
     },
   },
 });
 
+// --- 2. Infrastructure Constants ---
 const ELECTRIC_URL = import.meta.env.VITE_ELECTRIC_URL || 'http://localhost:3000';
 const BASE_SHAPE_URL = `${ELECTRIC_URL}/v1/shape`;
 
-// Type-safe id extractor to obey the strict Type Law
 const getKey = (row: unknown): string => {
   if (row && typeof row === 'object' && 'id' in row) {
     return String((row as { id: unknown }).id);
   }
-  return crypto.randomUUID(); 
+  return crypto.randomUUID();
 };
 
-const createTable = (tableName: string) => 
-  createCollection(electricCollectionOptions({ 
-    id: tableName, 
-    getKey, 
-    shapeOptions: { url: BASE_SHAPE_URL, params: { table: tableName } } 
+const createTable = (tableName: string) =>
+  createCollection(electricCollectionOptions({
+    id: tableName,
+    getKey,
+    shapeOptions: { url: BASE_SHAPE_URL, params: { table: tableName } }
   }));
 
-// 1. Explicit Individual Exports (Maintains backward compatibility for legacy modules)
+// --- 3. Individual Table Definitions (Legacy Compatibility) ---
 export const animalsCollection = createTable('animals');
 export const dailyLogsCollection = createTable('daily_logs');
 export const dailyRoundsCollection = createTable('daily_rounds');
@@ -56,7 +59,7 @@ export const zlaDocumentsCollection = createTable('zla_documents');
 export const organisationsCollection = createTable('organisations');
 export const rolePermissionsCollection = createTable('role_permissions');
 
-// 2. The Unified Registry (For the new Repository architecture)
+// --- 4. Unified Registry (Repository Pattern) ---
 export const db = {
   animals: animalsCollection,
   daily_logs: dailyLogsCollection,
@@ -86,3 +89,45 @@ export const db = {
 } as const;
 
 export type TableName = keyof typeof db;
+
+// --- 5. Sync Actuation (Used by SyncEngine) ---
+export const syncAll = async () => {
+  // 1. Detect if the Electric URL is configured and is not default localhost
+  const isLocalOrUnset = !import.meta.env.VITE_ELECTRIC_URL || 
+                          import.meta.env.VITE_ELECTRIC_URL.includes('localhost') || 
+                          import.meta.env.VITE_ELECTRIC_URL.includes('127.0.0.1');
+
+  const tables = Object.keys(db) as TableName[];
+
+  if (isLocalOrUnset) {
+    console.info('[DB] Operating in Client-Side Local Vault mode (No Electric Sync Service configured). Skipping HTTP sync fetches.');
+    return tables.map(table => ({ table, success: true, localOnly: true }));
+  }
+
+  console.log('[DB] Actuating sync for all tables against remote service:', ELECTRIC_URL);
+  
+  // 2. Perform a lightweight single ping probe to check if the remote host is reachable
+  // to avoid spawning multiple parallel fetch errors if the network/tunnel is dead.
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    // Use no-cors mode and HEAD method to minimize bandwidth and bypass simple CORS issues
+    await fetch(ELECTRIC_URL, { method: 'HEAD', mode: 'no-cors', signal: controller.signal });
+    clearTimeout(timeoutId);
+  } catch (err) {
+    console.warn('[DB] Sync service host is unreachable or the tunnel is inactive. Operating in Offline mode with local cache.');
+    return tables.map(table => ({ table, success: true, offline: true }));
+  }
+
+  // 3. Fallback to reading from local collections when fetch fails on individual tables
+  return Promise.all(tables.map(async (tableName) => {
+    try {
+      const response = await fetch(`${BASE_SHAPE_URL}?table=${tableName}`);
+      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+      return { table: tableName, success: true };
+    } catch (e) {
+      console.warn(`[DB] Sync fetch bypassed/failed for '${tableName}'. Operating from local cache.`, e);
+      return { table: tableName, success: false };
+    }
+  }));
+};

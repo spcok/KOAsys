@@ -4,8 +4,9 @@ import { persist } from 'zustand/middleware';
 interface Mutation {
   id: string;
   table: string;
-  action: 'insert' | 'update' | 'upsert' | 'delete';
+  action?: 'insert' | 'update' | 'upsert' | 'delete';
   payload: Record<string, unknown> | Record<string, unknown>[]; // TYPE LAW ENFORCED
+  created_at?: string;
 }
 
 interface OutboxState {

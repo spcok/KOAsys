@@ -1,60 +1,52 @@
-import { baseService } from './baseService';
-import { timesheetsCollection, usersCollection } from '../lib/db';
-import type { Timesheet, User } from '../types/schema';
+import { repository } from './repository';
+import type { Timesheet } from '../types/schema';
 
+/**
+ * Timesheet Service: Unified data-access layer for timesheets.
+ * Maps strictly to verified database schema.
+ */
 export const timesheetService = {
-  saveEntry: async (data: Partial<Timesheet>, userId: string): Promise<void> => {
-    const payload = { ...data, staff_id: userId, updated_at: new Date().toISOString() };
-    await baseService.upsertCollection(timesheetsCollection, payload);
-    await baseService.upsert({
-      table: 'timesheets',
-      payload,
-      queryKey: ['timesheets']
-    });
-  },
-
+  /**
+   * Get all timesheet records from the local repository vault.
+   */
   getTimesheets: async (): Promise<Timesheet[]> => {
-    return Array.from(timesheetsCollection.values()) as Timesheet[];
+    return await repository.read<Timesheet>('timesheets');
   },
 
-  getStaffMembers: async (): Promise<User[]> => {
-    return Array.from(usersCollection.values()) as User[];
+  /**
+   * Get the active shift for a specific user.
+   */
+  getActiveShift: async (userId: string): Promise<Timesheet | null> => {
+    const all = await repository.read<Timesheet>('timesheets');
+    return all.find(t => t.user_id === userId && !t.clock_out_time && !t.is_deleted) || null;
   },
 
-  getActiveShift: async (userId: string): Promise<Timesheet | undefined> => {
-    const list = Array.from(timesheetsCollection.values()) as Timesheet[];
-    return list.find(t => t.user_id === userId && !t.clock_out_time);
-  },
-
+  /**
+   * Clock In: Create a new timesheet record.
+   */
   clockIn: async (userId: string): Promise<void> => {
-    const payload: Partial<Timesheet> = {
-      id: crypto.randomUUID(),
+    const payload: Timesheet = {
       user_id: userId,
       shift_date: new Date().toISOString().split('T')[0],
       clock_in_time: new Date().toISOString(),
+      clock_out_time: null,
       status: 'ACTIVE',
-      updated_at: new Date().toISOString()
+      notes: null,
+      auto_clocked_out: false,
+      is_deleted: false,
     };
-    await baseService.upsertCollection(timesheetsCollection, payload);
-    await baseService.upsert({
-      table: 'timesheets',
-      payload,
-      queryKey: ['active_shift', userId]
-    });
+    await repository.write('timesheets', payload);
   },
 
-  clockOut: async (activeShift: Timesheet, userId: string): Promise<void> => {
+  /**
+   * Clock Out: Update the active shift record with clock_out_time.
+   */
+  clockOut: async (activeShift: Timesheet): Promise<void> => {
     const payload = {
       ...activeShift,
       clock_out_time: new Date().toISOString(),
       status: 'COMPLETED',
-      updated_at: new Date().toISOString()
     };
-    await baseService.upsertCollection(timesheetsCollection, payload);
-    await baseService.upsert({
-      table: 'timesheets',
-      payload,
-      queryKey: ['active_shift', userId]
-    });
+    await repository.write('timesheets', payload);
   }
 };
