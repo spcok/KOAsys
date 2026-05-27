@@ -2,7 +2,22 @@ import { createCollection } from '@tanstack/react-db';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
 import { QueryClient } from '@tanstack/react-query';
 
-export const queryClient = new QueryClient();
+// --- THE LOCAL-FIRST HYDRATION ENGINE ---
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // 1. The Heartbeat: Poll the local memory collections every 1.5s
+      // This catches ElectricSQL background syncs automatically.
+      refetchInterval: 1500,
+      
+      // 2. Offline-First Strictness: Force cache reads, prevent network retries
+      staleTime: 0, 
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      retry: false, 
+    },
+  },
+});
 
 const ELECTRIC_URL = import.meta.env.VITE_ELECTRIC_URL || 'http://localhost:3000';
 const BASE_SHAPE_URL = `${ELECTRIC_URL}/v1/shape`;
