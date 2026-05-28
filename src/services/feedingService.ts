@@ -5,7 +5,7 @@ import type { FeedingSchedule } from '../types/schema';
 export const feedingService = {
   saveSchedule: async (data: Partial<FeedingSchedule>, userId: string): Promise<void> => {
     const payload = { ...data, created_by: userId, updated_at: new Date().toISOString() };
-    await baseService.upsertCollection(feedingSchedulesCollection, payload as any);
+    await baseService.upsertCollection(feedingSchedulesCollection, payload as unknown as any);
     await baseService.upsert({
       table: 'feeding_schedules',
       payload,
@@ -21,7 +21,7 @@ export const feedingService = {
         updated_at: new Date().toISOString(),
         id: data.id || crypto.randomUUID()
       };
-      await baseService.upsertCollection(feedingSchedulesCollection, payload as any);
+      await baseService.upsertCollection(feedingSchedulesCollection, payload as unknown as any);
       await baseService.upsert({
         table: 'feeding_schedules',
         payload,
@@ -31,7 +31,7 @@ export const feedingService = {
   },
 
   getSchedulesForDashboard: async (date?: string): Promise<FeedingSchedule[]> => {
-    let list = Array.from(feedingSchedulesCollection.values()) as FeedingSchedule[];
+    let list = Array.from(feedingSchedulesCollection.values()) as unknown as FeedingSchedule[];
     
     // Filter out soft-deleted records before returning to UI
     list = list.filter(s => !s.is_deleted);
@@ -50,7 +50,7 @@ export const feedingService = {
     };
     
     // Optimistic Local Vault Update: Sets is_deleted to true so the UI hides it instantly
-    await baseService.upsertCollection(feedingSchedulesCollection, payload as any);
+    await baseService.upsertCollection(feedingSchedulesCollection, payload as unknown as any);
     
     // Deterministic Cloud Update: Will catch in the OutboxStore if the keeper is offline
     await baseService.upsert({

@@ -14,14 +14,14 @@ export const safetyDrillService = {
   },
 
   getDrills: async (): Promise<SafetyDrill[]> => {
-    return Array.from(safetyDrillsCollection.values()) as SafetyDrill[];
+    return Array.from(safetyDrillsCollection.values()) as unknown as SafetyDrill[];
   },
 
   getStaffMembers: async (): Promise<User[]> => {
-    return Array.from(usersCollection.values()) as User[];
+    return Array.from(usersCollection.values()) as unknown as User[];
   },
 
   getActiveTimesheets: async (): Promise<Timesheet[]> => {
-    return Array.from(timesheetsCollection.values()) as Timesheet[];
+    return Array.from(timesheetsCollection.values()) as unknown as Timesheet[];
   }
 };
