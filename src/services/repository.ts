@@ -9,7 +9,7 @@ export const repository = {
     const collection = db[table];
     if (!collection) return [];
     
-    return (Array.from(collection.values()) || []) as T[];
+    return (Array.from(collection.values()) || []) as unknown as T[];
   },
 
   /**
@@ -32,7 +32,7 @@ export const repository = {
       id: crypto.randomUUID(),
       table,
       action: 'upsert',
-      payload: finalPayload as Record<string, unknown>,
+      payload: finalPayload as unknown as Record<string, unknown>,
       created_at: new Date().toISOString(),
     });
 
@@ -54,6 +54,6 @@ export const repository = {
    */
   remove: async (table: TableName, id: string): Promise<void> => {
     // Convert to a soft-delete write operation
-    await repository.write(table, { id, is_deleted: true } as any);
+    await repository.write(table, { id, is_deleted: true } as unknown as any);
   }
 };

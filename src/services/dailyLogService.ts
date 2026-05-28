@@ -4,14 +4,14 @@ import { dailyLogsCollection } from '../lib/db';
 
 export const dailyLogService = {
   getDashboardLogs: async (date: string): Promise<{ todaysLogs: DailyLog[]; lastFeeds: DailyLog[] }> => {
-    const logs = Array.from(dailyLogsCollection.values()) as DailyLog[];
+    const logs = Array.from(dailyLogsCollection.values()) as unknown as DailyLog[];
     const todaysLogs = logs.filter(l => l.log_date?.startsWith(date));
     const lastFeeds = logs.filter(l => l.log_type === 'FEED');
     return { todaysLogs, lastFeeds };
   },
 
   getLogsByDate: async (date?: string, category?: string): Promise<DailyLog[]> => {
-    let logs = Array.from(dailyLogsCollection.values()) as DailyLog[];
+    let logs = Array.from(dailyLogsCollection.values()) as unknown as DailyLog[];
     if (date) {
       logs = logs.filter(l => l.log_date?.startsWith(date));
     }
@@ -22,7 +22,7 @@ export const dailyLogService = {
   },
 
   getLogsByAnimal: async (animalId: string): Promise<DailyLog[]> => {
-    const logs = Array.from(dailyLogsCollection.values()) as DailyLog[];
+    const logs = Array.from(dailyLogsCollection.values()) as unknown as DailyLog[];
     return logs.filter(l => l.animal_id === animalId);
   },
 

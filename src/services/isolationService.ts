@@ -18,19 +18,19 @@ export const isolationService = {
   },
 
   getActiveIsolations: async (): Promise<IsolationLog[]> => {
-    const logs = Array.from(isolationLogsCollection.values()) as IsolationLog[];
+    const logs = Array.from(isolationLogsCollection.values()) as unknown as IsolationLog[];
     return logs.filter(l => !l.is_deleted && (!l.end_date || new Date(l.end_date) > new Date()));
   },
 
   getAllIsolations: async (): Promise<IsolationLog[]> => {
-    return Array.from(isolationLogsCollection.values()) as IsolationLog[];
+    return Array.from(isolationLogsCollection.values()) as unknown as IsolationLog[];
   },
 
   getAnimals: async (): Promise<Animal[]> => {
-    return Array.from(animalsCollection.values()) as Animal[];
+    return Array.from(animalsCollection.values()) as unknown as Animal[];
   },
 
   getStaffMembers: async (): Promise<User[]> => {
-    return Array.from(usersCollection.values()) as User[];
+    return Array.from(usersCollection.values()) as unknown as User[];
   }
 };

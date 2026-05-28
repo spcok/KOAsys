@@ -14,7 +14,7 @@ export const dailyRoundService = {
   },
 
   getDailyRounds: async (date?: string, shift?: string): Promise<DailyRound[]> => {
-    let rounds = Array.from(dailyRoundsCollection.values()) as DailyRound[];
+    let rounds = Array.from(dailyRoundsCollection.values()) as unknown as DailyRound[];
     if (date) {
       rounds = rounds.filter(r => r.date === date);
     }

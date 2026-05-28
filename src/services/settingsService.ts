@@ -13,12 +13,12 @@ export const settingsService = {
   },
 
   getOrganisation: async (): Promise<Organisation | undefined> => {
-    const list = Array.from(organisationsCollection.values()) as Organisation[];
+    const list = Array.from(organisationsCollection.values()) as unknown as Organisation[];
     return list[0];
   },
 
   getZLADocuments: async (): Promise<ZLADocument[]> => {
-    const list = Array.from(zlaDocumentsCollection.values()) as ZLADocument[];
+    const list = Array.from(zlaDocumentsCollection.values()) as unknown as ZLADocument[];
     return list.filter(doc => !doc.is_deleted); // Filter out soft-deleted records
   },
 
@@ -45,7 +45,7 @@ export const settingsService = {
     };
     
     // Optimistic Local Vault Update
-    await baseService.upsertCollection(zlaDocumentsCollection, payload as any);
+    await baseService.upsertCollection(zlaDocumentsCollection, payload as unknown as any);
     
     // Deterministic Cloud Update
     await baseService.upsert({
@@ -56,7 +56,7 @@ export const settingsService = {
   },
 
   getOperationalLists: async (): Promise<OperationalList[]> => {
-    const list = Array.from(operationalListsCollection.values()) as OperationalList[];
+    const list = Array.from(operationalListsCollection.values()) as unknown as OperationalList[];
     return list.filter(item => !item.is_deleted); // Filter out soft-deleted records
   },
 
@@ -84,7 +84,7 @@ export const settingsService = {
     };
     
     // Optimistic Local Vault Update
-    await baseService.upsertCollection(operationalListsCollection, payload as any);
+    await baseService.upsertCollection(operationalListsCollection, payload as unknown as any);
     
     // Deterministic Cloud Update
     await baseService.upsert({
@@ -94,7 +94,7 @@ export const settingsService = {
     });
   },
 
-  // Note: Direct Supabase call retained here as this handles large binary file uploads, 
+  // Note: Direct Supabase call retained here as unknown as this handles large binary file uploads,
   // which intentionally bypass the relational Electric Sync engine.
   uploadPublicFile: async (file: File, bucket: string, folder?: string): Promise<string> => {
     const path = `${folder ? folder + '/' : ''}${crypto.randomUUID()}-${file.name}`;

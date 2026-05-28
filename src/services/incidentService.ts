@@ -8,7 +8,7 @@ export const incidentService = {
     const finalUserId = userId || useAuthStore.getState().user?.id || 'system';
     const payload = { ...data, reported_by: finalUserId, updated_at: new Date().toISOString() };
     
-    await baseService.upsertCollection(incidentsCollection, payload as any);
+    await baseService.upsertCollection(incidentsCollection, payload as unknown as any);
     
     await baseService.upsert({
       table: 'incidents',
@@ -18,7 +18,7 @@ export const incidentService = {
   },
 
   getIncidents: async (): Promise<Incident[]> => {
-    const list = Array.from(incidentsCollection.values()) as Incident[];
+    const list = Array.from(incidentsCollection.values()) as unknown as Incident[];
     return list.filter(i => !i.is_deleted);
   }
 };

@@ -26,14 +26,14 @@ export const clinicalService = {
   },
 
   getClinicalRecords: async (): Promise<ClinicalRecord[]> => {
-    return Array.from(clinicalRecordsCollection.values()) as ClinicalRecord[];
+    return Array.from(clinicalRecordsCollection.values()) as unknown as ClinicalRecord[];
   },
 
   getAnimals: async (): Promise<Animal[]> => {
-    return Array.from(animalsCollection.values()) as Animal[];
+    return Array.from(animalsCollection.values()) as unknown as Animal[];
   },
 
   getStaffMembers: async (): Promise<User[]> => {
-    return Array.from(usersCollection.values()) as User[];
+    return Array.from(usersCollection.values()) as unknown as User[];
   }
 };

@@ -39,7 +39,7 @@ export function Header() {
       } else {
         // USE CORRECT DB COLUMN NAMES
         await repository.write('timesheets', {
-          user_id: session.user.id,
+          id: session.user.id,
           shift_date: new Date().toISOString().split('T')[0],
           clock_in_time: new Date().toISOString(),
           status: 'ACTIVE',

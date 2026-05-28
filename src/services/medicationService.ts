@@ -35,23 +35,23 @@ export const medicationService = {
   },
 
   getAnimals: async (): Promise<Animal[]> => {
-    return Array.from(animalsCollection.values()) as Animal[];
+    return Array.from(animalsCollection.values()) as unknown as Animal[];
   },
 
   getStaffMembers: async (): Promise<User[]> => {
-    return Array.from(usersCollection.values()) as User[];
+    return Array.from(usersCollection.values()) as unknown as User[];
   },
 
   getActiveSchedules: async (): Promise<ClinicalSchedule[]> => {
-    const schedules = Array.from(clinicalScheduleCollection.values()) as ClinicalSchedule[];
+    const schedules = Array.from(clinicalScheduleCollection.values()) as unknown as ClinicalSchedule[];
     return schedules.filter(s => !s.is_deleted && (!s.end_date || new Date(s.end_date) > new Date()));
   },
 
   getAllSchedules: async (): Promise<ClinicalSchedule[]> => {
-    return Array.from(clinicalScheduleCollection.values()) as ClinicalSchedule[];
+    return Array.from(clinicalScheduleCollection.values()) as unknown as ClinicalSchedule[];
   },
 
   getLogs: async (): Promise<MedicationLog[]> => {
-    return Array.from(medicationLogsCollection.values()) as MedicationLog[];
+    return Array.from(medicationLogsCollection.values()) as unknown as MedicationLog[];
   }
 };

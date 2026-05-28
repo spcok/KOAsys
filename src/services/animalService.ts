@@ -50,6 +50,6 @@ export const animalService = {
   },
 
   getAnimals: async (): Promise<Animal[]> => {
-    return Array.from(animalsCollection.values()) as Animal[];
+    return Array.from(animalsCollection.values()) as unknown as Animal[];
   }
 };
